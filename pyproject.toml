@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mcp-cloudtube"
+version = "0.1.0"
+description = "MCP server exposing Google Drive storage and YouTube publishing to AI clients"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    "mcp>=1.2.0",
+    "google-api-python-client>=2.150.0",
+    "google-auth>=2.35.0",
+    "google-auth-oauthlib>=1.2.1",
+    "httpx>=0.27.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "structlog>=24.4.0",
+    "tenacity>=9.0.0",
+    "anyio>=4.6.0",
+    "pypdf>=5.1.0",
+    "uvicorn>=0.32.0",
+    "starlette>=0.41.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.7.0",
+    "mypy>=1.13.0",
+    "freezegun>=1.5.0",
+]
+
+[project.scripts]
+mcp-cloudtube = "mcp_cloudtube.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_cloudtube"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# basetemp is pinned inside the project so the suite does not depend on the
+# state of the system temp directory, which on a developer machine can carry
+# stale, permission-broken directories from unrelated tools.
+addopts = "-ra --strict-markers --basetemp=.pytest-tmp"
+markers = [
+    "integration: hits real Google APIs; requires credentials and burns quota",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Lines in these files carry the pre-commit hook's `cloudtube:allow-secret-pattern`
+# marker. The hook matches it per line, so the line cannot be wrapped to fit.
+"tests/unit/test_errors.py" = ["E501"]
+"tests/integration/test_tool_surface.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src"]
