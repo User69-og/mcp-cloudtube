@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------------------
+# Credentials and secrets. Nothing in this block may ever enter git history.
+# A leaked secret is an automatic fail for this assignment, so the patterns
+# here are deliberately broad: it is cheaper to ignore a file we wanted than
+# to rewrite history for one we didn't.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*client_secret*.json
+*client_secrets*.json
+*credentials*.json
+!**/test_credentials_fixture.json
+*token*.json
+!**/test_token_fixture.json
+secrets/
+.secrets/
+var/
+*.pem
+*.key
+*.p12
+service-account*.json
+
+# Runtime state (OAuth tokens, upload job database, logs)
+.cloudtube/
+*.db
+*.sqlite3
+*.log
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.pytest-tmp/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+
+# Media used for manual testing (large, and not ours to redistribute)
+media/
+*.mp4
+*.mov
+*.mkv
+!tests/**/fixtures/*.mp4
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# The assignment brief itself stays local
+*.pdf

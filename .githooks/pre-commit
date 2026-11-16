@@ -1,0 +1,46 @@
+#!/bin/sh
+# Refuse to commit anything that looks like a credential.
+#
+# Install with:  git config core.hooksPath .githooks
+# (run automatically by `make setup` / scripts/bootstrap.ps1)
+#
+# A line may opt out of the content scan with the marker
+#   cloudtube:allow-secret-pattern
+# which exists so that the detector, its tests, and the documentation can
+# describe the shape of a secret without tripping over themselves. Use it only
+# for patterns, never for a real value.
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+# --- 1. Block files whose *name* says credential -------------------------
+blocked=$(printf '%s\n' "$staged" | grep -Ei \
+  '(client_secret|client_secrets|credentials|service-account).*\.json$|^\.secrets/|(^|/)\.env$|\.pem$|\.p12$|\.key$|token.*\.json$' \
+  | grep -v 'fixture' || true)
+
+if [ -n "$blocked" ]; then
+  echo "pre-commit: refusing to commit credential-shaped files:" >&2
+  printf '%s\n' "$blocked" | sed 's/^/  - /' >&2
+  echo "" >&2
+  echo "These belong in .secrets/ or the state directory, both gitignored." >&2
+  echo "If one is genuinely a test fixture, put 'fixture' in its filename." >&2
+  exit 1
+fi
+
+# --- 2. Block live-secret-shaped content ----------------------------------
+hits=$(git diff --cached -U0 \
+  | grep -v 'cloudtube:allow-secret-pattern' \
+  | grep -nE '"private_key"[[:space:]]*:|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ya29\.[A-Za-z0-9_-]{20,}|1//[A-Za-z0-9_-]{30,}|AIza[A-Za-z0-9_-]{35}|GOCSPX-[A-Za-z0-9_-]{15,}' \
+  || true)
+
+if [ -n "$hits" ]; then
+  echo "pre-commit: a staged line looks like a live secret:" >&2
+  printf '%s\n' "$hits" | cut -c1-120 | sed 's/^/  /' >&2
+  echo "" >&2
+  echo "Remove it. Do not plan to rewrite history afterwards -- by then it has" >&2
+  echo "already been pushed, and the credential must be rotated regardless." >&2
+  exit 1
+fi
+
+exit 0
