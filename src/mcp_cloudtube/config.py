@@ -31,7 +31,17 @@ GOOGLE_SCOPES: tuple[str, ...] = (
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
     "https://www.googleapis.com/auth/userinfo.email",
+    # Requested explicitly because Google grants it anyway: asking for
+    # userinfo.email implies OpenID Connect, and the token response comes back
+    # carrying `openid` whether or not it was requested. Listing it here keeps
+    # the requested and granted sets equal, which several layers compare.
+    "openid",
 )
+
+#: Scopes Google may add to a grant on its own. Tolerated when they come back,
+#: never required. Kept separate from GOOGLE_SCOPES so that "what we need" and
+#: "what we will accept" stay distinguishable.
+GOOGLE_IMPLICIT_SCOPES: frozenset[str] = frozenset({"openid"})
 
 
 def _default_state_dir() -> Path:

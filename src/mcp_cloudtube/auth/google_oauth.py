@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import contextlib
 import http.server
+import os
 import secrets
 import socket
 import threading
@@ -41,13 +42,26 @@ from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 
-from ..config import GOOGLE_SCOPES, Settings
+from ..config import GOOGLE_IMPLICIT_SCOPES, GOOGLE_SCOPES, Settings
 from ..errors import ErrorCode, ToolError
 from ..google_errors import translate
 from ..logging_setup import get_logger
 from .token_store import DEFAULT_ACCOUNT, TokenStore
 
 logger = get_logger(__name__)
+
+# oauthlib refuses a token response whose granted scopes are not an exact set
+# match for the requested ones, and raises a bare `Warning` to say so. Google
+# routinely returns a superset -- it adds `openid` to any grant involving
+# userinfo.email -- so that check fires on a perfectly good authorisation and
+# surfaces as an unhandled error from deep inside the library.
+#
+# Relaxing it is safe here precisely because it is not the real check:
+# `_assert_scopes_granted` below verifies that every scope the server needs was
+# actually granted, which is the property that matters. oauthlib's version is
+# both stricter (it rejects harmless extras) and weaker (it says nothing about
+# which scope is missing), so ours replaces it rather than relying on it.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 #: How long a started authorisation stays valid before the listener gives up.
 AUTH_WINDOW_SECONDS = 600.0
@@ -96,6 +110,8 @@ class PendingAuth:
     server: http.server.HTTPServer
     thread: threading.Thread
     started_at: float = field(default_factory=time.monotonic)
+    #: Wall-clock twin of started_at, for comparing against saved credentials.
+    started_wall: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed: threading.Event = field(default_factory=threading.Event)
     error: ToolError | None = None
 
@@ -238,9 +254,15 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
 
 
 def _assert_scopes_granted(credentials: Credentials) -> None:
-    """Fail early if the user unticked a permission on the consent screen."""
+    """Fail early if the user unticked a permission on the consent screen.
+
+    Checks that the granted set *covers* what we need, rather than that it
+    matches exactly. Google adds scopes of its own accord (see
+    GOOGLE_IMPLICIT_SCOPES), and a grant carrying more than we asked for is
+    not a problem -- a grant carrying less is.
+    """
     granted = set(credentials.scopes or ())
-    required = set(GOOGLE_SCOPES)
+    required = set(GOOGLE_SCOPES) - GOOGLE_IMPLICIT_SCOPES
     missing = required - granted
     if missing:
         raise ToolError(
@@ -399,12 +421,27 @@ class GoogleAuthManager:
                 pending.server.server_close()
             self._pending = None
 
-    def pending_error(self) -> ToolError | None:
-        """The failure from the last completed attempt, if it failed."""
+    def pending_error(self, account: str = DEFAULT_ACCOUNT) -> ToolError | None:
+        """The failure from the last completed attempt, if it failed.
+
+        Suppressed once credentials exist that were saved after the attempt
+        began. A failed attempt followed by a successful one -- which is what
+        a retry looks like -- would otherwise keep reporting the old failure
+        next to a working connection, and a model reading that will tell the
+        user something is broken when nothing is.
+        """
         pending = self._pending
-        if pending is not None and pending.completed.is_set():
-            return pending.error
-        return None
+        if pending is None or not pending.completed.is_set() or pending.error is None:
+            return None
+
+        saved = self._store.load(account)
+        if saved and (saved_at := saved.get("saved_at")):
+            try:
+                if datetime.fromisoformat(saved_at) >= pending.started_wall:
+                    return None
+            except ValueError:  # pragma: no cover - malformed timestamp
+                pass
+        return pending.error
 
     def authorization_in_progress(self) -> bool:
         pending = self._pending
