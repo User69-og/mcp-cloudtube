@@ -67,3 +67,6 @@ desktop.ini
 
 # The assignment brief itself stays local
 *.pdf
+
+# Local working notes, not part of the submission
+DEMO_RUNSHEET.md
