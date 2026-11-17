@@ -34,6 +34,8 @@ from typing import Any
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from pypdf import PdfReader
+from pypdf.errors import DependencyError, PyPdfError
 
 from ..auth.google_oauth import GoogleAuthManager
 from ..config import Settings
@@ -468,45 +470,16 @@ class GoogleDriveProvider:
             operation=f"download PDF '{meta.name}'",
         )
 
-        try:
-            from pypdf import PdfReader
-            from pypdf.errors import PdfError
+        text, page_count = _pdf_to_text(raw, summary=meta.summary(), file_id=meta.id)
 
-            reader = PdfReader(io.BytesIO(raw))
-            if reader.is_encrypted:
-                raise ToolError(
-                    ErrorCode.UNSUPPORTED_MEDIA_TYPE,
-                    f"{meta.summary()} is a password-protected PDF.",
-                    remediation=(
-                        "The server has no password for it. Describe it from its metadata, or "
-                        "ask the user for an unprotected copy."
-                    ),
-                    details={"file_id": meta.id},
-                )
-            pages = [page.extract_text() or "" for page in reader.pages]
-        except ToolError:
-            raise
-        except (PdfError, ValueError, OSError, RecursionError) as exc:
-            raise ToolError(
-                ErrorCode.UNSUPPORTED_MEDIA_TYPE,
-                f"The PDF {meta.summary()} could not be parsed: {exc}",
-                remediation=(
-                    "The file may be corrupt or only partially downloaded. Describe it from "
-                    "its metadata instead."
-                ),
-                details={"file_id": meta.id},
-                cause=exc,
-            ) from exc
-
-        text = "\n\n".join(p for p in pages if p.strip())
         truncated = len(text) > limit
         if truncated:
             text = text[:limit]
 
-        notice = f"Text extracted from {len(pages)} PDF page(s)."
+        notice = f"Text extracted from {page_count} PDF page(s)."
         if not text.strip():
             notice = (
-                f"This PDF has {len(pages)} page(s) but no extractable text layer -- it is "
+                f"This PDF has {page_count} page(s) but no extractable text layer -- it is "
                 "probably a scan. Tell the user it would need OCR; do not claim it is empty."
             )
         elif truncated:
@@ -646,6 +619,49 @@ class GoogleDriveProvider:
 # ---------------------------------------------------------------------------
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_\-]{5,}$")
+
+
+def _pdf_to_text(raw: bytes, *, summary: str, file_id: str) -> tuple[str, int]:
+    """Extract text from PDF bytes. Returns (text, page_count).
+
+    Pure and synchronous so it can be tested against real PDF bytes without a
+    provider, a network or credentials -- which is how the bug this replaced
+    went unnoticed: every PDF path ran only against live Drive.
+
+    The exception list is deliberately explicit. `PyPdfError` is pypdf's base
+    class (there is no `PdfError`, which is what the earlier version wrongly
+    imported), and `DependencyError` sits outside that hierarchy -- pypdf
+    raises it when an encrypted file needs a crypto backend that is not
+    installed, which is exactly a case we must not crash on.
+    """
+    try:
+        reader = PdfReader(io.BytesIO(raw))
+        if reader.is_encrypted:
+            raise ToolError(
+                ErrorCode.UNSUPPORTED_MEDIA_TYPE,
+                f"{summary} is a password-protected PDF.",
+                remediation=(
+                    "The server has no password for it. Describe it from its metadata, or "
+                    "ask the user for an unprotected copy."
+                ),
+                details={"file_id": file_id},
+            )
+        pages = [page.extract_text() or "" for page in reader.pages]
+    except ToolError:
+        raise
+    except (PyPdfError, DependencyError, ValueError, OSError, RecursionError) as exc:
+        raise ToolError(
+            ErrorCode.UNSUPPORTED_MEDIA_TYPE,
+            f"The PDF {summary} could not be parsed: {exc}",
+            remediation=(
+                "The file may be corrupt or only partially downloaded. Describe it from "
+                "its metadata instead."
+            ),
+            details={"file_id": file_id},
+            cause=exc,
+        ) from exc
+
+    return "\n\n".join(p for p in pages if p.strip()), len(pages)
 
 
 def _require_id(file_id: str) -> str:
