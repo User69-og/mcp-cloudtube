@@ -236,13 +236,22 @@ testing against production would mean testing error handling roughly never.
 
 ## Known limitations
 
-**Uploads are forced to `private`.** Google restricts any API project that has
-not passed YouTube's compliance audit: uploaded videos are locked to private
-regardless of the `privacyStatus` requested. The audit takes weeks, so it is
-out of scope here. The server sends the requested privacy correctly, reads
-back what YouTube actually applied, and reports `PRIVACY_NOT_APPLIED` when
-they differ. The job still *completes* — the video is live, and reporting
-failure would be false and would invite a duplicate upload.
+**Privacy may not be applied, though in testing it was.** Google documents
+that an API project which has not passed YouTube's compliance audit has its
+uploads restricted to private, whatever `privacyStatus` the request asks for.
+**That was not observed here**: uploading to the project owner's own channel
+from a Testing-status OAuth app, a request for `unlisted` was applied as
+`unlisted`, confirmed both in the job record and by reading the video back
+through `videos.list`.
+
+The handling remains, because the documented restriction is real and may apply
+to other projects, at other scales, or after a policy change. The server sends
+the requested privacy, reads back what YouTube actually applied, and reports
+`PRIVACY_NOT_APPLIED` when they differ — with the job still marked *completed*,
+because the video genuinely is published. Reporting failure would be false and
+would invite a duplicate upload; reporting plain success would tell the user
+the wrong thing about who can see their video. That path is covered by a
+failure-scenario test rather than by a live occurrence.
 
 **Quota allows about six uploads a day.** 10,000 units, 1,600 per insert,
 reset at midnight US/Pacific.

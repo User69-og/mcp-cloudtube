@@ -134,14 +134,14 @@ Signed in as the test account, at <https://drive.google.com/>:
 
 ## 7. Two limits you need to know about now, not on demo day
 
-**Uploads will be locked to private.** Google restricts any API project that
-has not passed the YouTube API compliance audit: videos uploaded through it are
-forced to `private` and cannot be made public or unlisted, whatever
-`privacyStatus` the request asks for. The audit takes weeks, so it is out of
-scope for a five-day assignment. The server therefore sends the requested
-privacy correctly, reads back what YouTube actually applied, and tells you
-plainly when the two differ rather than pretending it worked. This is
-documented in the README as a known limitation.
+**Uploads may be locked to private.** Google documents that an API project
+which has not completed the YouTube API compliance audit has its uploads
+forced to `private` regardless of the requested privacy. In practice this was
+*not* observed when uploading to the project owner's own channel from a
+Testing-status app: a request for `unlisted` came back as `unlisted`. Treat it
+as a possibility rather than a certainty. The server sends the requested
+privacy, reads back what YouTube applied, and tells you plainly when the two
+differ rather than pretending it worked.
 
 **Quota is 10,000 units per day.** A video insert costs 1,600 units, so the
 project gets roughly **six real uploads per day**, counting failures. Quota
