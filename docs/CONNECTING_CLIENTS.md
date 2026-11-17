@@ -1,161 +1,198 @@
 # Connecting Claude and ChatGPT
 
-The server is the same for both. Only the transport differs, because the two
-clients connect in fundamentally different ways:
+The server is the same for both clients. Only the transport differs.
 
-| | Claude Desktop | ChatGPT |
-|---|---|---|
-| How it connects | launches the server as a subprocess | connects to an HTTPS URL |
-| Transport | stdio (JSON-RPC over stdin/stdout) | streamable HTTP |
-| Listening socket | **none** | `127.0.0.1:8077`, behind a tunnel |
-| Needs a tunnel | no | yes |
-
-Claude is the simpler and more secure of the two: nothing is listening on a
-port at all, so there is nothing on the machine to reach.
+| | Claude Desktop | Claude Code | ChatGPT |
+|---|---|---|---|
+| How it connects | installed extension | `claude_desktop_config.json` | custom connector (HTTPS URL) |
+| Transport | stdio | stdio | streamable HTTP |
+| Listening socket | **none** | **none** | `127.0.0.1:8077`, behind a tunnel |
+| Status | **working, verified** | **working, verified** | **verified at the protocol level**; see below |
 
 ---
 
-## Prerequisite
+## Prerequisites
 
-Both paths assume setup is done:
+Both paths need the project set up and a Google Cloud project of your own:
 
-```bash
+```
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
 ```
 
-and that `docs/SETUP_GOOGLE_CLOUD.md` has been worked through, so
-`.secrets/client_secret.json` exists. Confirm with:
+(POSIX: `make setup`.) Then work through
+[SETUP_GOOGLE_CLOUD.md](SETUP_GOOGLE_CLOUD.md) — about 40 minutes, and the one
+part that cannot be automated because Google requires a human in the console.
 
-```bash
+Confirm before going further:
+
+```
 .venv\Scripts\python.exe -m mcp_cloudtube --check
 ```
 
 ---
 
-## Claude Desktop
+## Claude Desktop (recommended)
 
-1. Open the config file. On Windows:
+Install `dist/cloudtube-0.1.0.mcpb` — double-click it, or
+**Settings → Extensions → Install extension**.
 
-   ```
-   %APPDATA%\Claude\claude_desktop_config.json
-   ```
+It asks for two things, **both optional**:
 
-   On macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`.
-   Create it if it does not exist.
+| Field | Leave blank if… |
+|---|---|
+| **Python interpreter** | the `python` on your PATH has this project's dependencies |
+| **OAuth client secrets** | you saved `client_secret.json` into the server's state folder |
 
-2. Add the server. **Use absolute paths** — Claude launches the subprocess
-   from an unspecified working directory, so a relative path will not resolve:
+> **If the extension says "couldn't start"**, the interpreter is almost
+> certainly the cause: the default `python` on PATH usually does not have the
+> dependencies. Click **View logs** — the server prints which interpreter ran,
+> exactly which packages are missing, and what to set instead. Point the field
+> at the project's virtual environment:
+>
+> - Windows: `<project>\.venv\Scripts\python.exe`
+> - macOS / Linux: `<project>/.venv/bin/python`
 
-   ```json
-   {
-     "mcpServers": {
-       "cloudtube": {
-         "command": "E:\Internship Project\.venv\Scripts\python.exe",
-         "args": ["-m", "mcp_cloudtube", "--transport", "stdio"],
-         "env": {
-           "CLOUDTUBE_CLIENT_SECRET_FILE": "E:\Internship Project\.secrets\client_secret.json"
-         }
-       }
-     }
-   }
-   ```
+Then enable it and set tool permissions. A sensible split:
 
-   On macOS or Linux the command is `/path/to/project/.venv/bin/python` and
-   the paths use forward slashes.
+- **Read-only tools** → *Always allow*. Browsing and reading are safe, and a
+  prompt on every search makes the thing tedious to use.
+- **Write/delete tools** → *Needs approval*. You want a prompt before
+  publishing to a channel.
 
-3. Restart Claude Desktop completely — quit it, do not just close the window.
+Claude groups them that way automatically, from the `readOnlyHint` and
+`destructiveHint` annotations each tool declares.
 
-4. The tools appear under the tools icon in the chat input. Try:
+### Rebuilding the extension
 
-   > What's in my Google Drive?
-
-   The first call returns `AUTH_REQUIRED`, Claude calls `connect_account`, and
-   you get a link to approve. That is the intended first-run experience.
-
-### If the server does not appear
-
-Claude logs MCP server output to `%APPDATA%\Claude\logs\`. The most common
-causes, in order:
-
-- a relative path in `command` (use absolute);
-- the venv python not existing at that path;
-- JSON syntax errors in the config file — a trailing comma is the usual one;
-- Claude not fully restarted.
-
-Run the command from the config by hand to see the real error:
-
-```bash
-"E:\Internship Project\.venv\Scripts\python.exe" -m mcp_cloudtube --check
 ```
+make extension
+```
+
+The bundle carries 85 KB of this project's own source and vendors nothing. A
+full dependency tree would be 196 MB of platform-specific compiled binaries —
+`pydantic_core`, `cryptography`, protobuf's `_upb` — useless to anyone on a
+different OS or Python version.
+
+---
+
+## Claude Code
+
+Add the server to `claude_desktop_config.json`. On Windows that file may live
+in a custom data directory rather than `%APPDATA%\Claude` — search for it if
+the obvious path has no `mcpServers` key.
+
+```json
+{
+  "mcpServers": {
+    "cloudtube": {
+      "command": "E:\Internship Project\.venv\Scripts\python.exe",
+      "args": ["-m", "mcp_cloudtube", "--transport", "stdio"],
+      "env": {
+        "CLOUDTUBE_CLIENT_SECRET_FILE": "E:\Internship Project\.secrets\client_secret.json"
+      }
+    }
+  }
+}
+```
+
+**Use absolute paths.** The client launches the subprocess from an unspecified
+working directory, so a relative path will not resolve. Restart fully
+afterwards — a background process keeps the old server list alive.
 
 ---
 
 ## ChatGPT
 
-ChatGPT cannot launch a local subprocess. A custom connector is a URL, and it
-must be HTTPS and publicly reachable, so a local server needs a tunnel in
-front of it. This is a constraint of the client, not a design choice here —
-see *Decisions* in the README.
+**The server supports this and it has been verified. The blocker is the
+account tier, not the code.**
 
-1. **Start the server over HTTP:**
+ChatGPT reaches MCP servers through custom connectors, which require **Plus,
+Pro, Business or Enterprise**. On a free account, Developer Mode is not
+available and no connector can be added — so the path cannot be
+*demonstrated* on a free plan, however correct the server is.
 
-   ```bash
+What *can* be shown is that the endpoint is a working remote MCP server:
+
+```
+python -m mcp_cloudtube --transport http        # in one terminal
+python scripts/verify_http_endpoint.py          # in another
+```
+
+That script uses the standard library only and does exactly what a connector
+does: opens a session, completes the `initialize` handshake, lists the tools,
+calls one, and checks that a bad argument comes back as a structured error
+rather than a transport fault. Sample output:
+
+```
+  [ok]  initialize       cloudtube v0.1.0
+  [ok]  session id       99e297d50e874121b1ceeb3ce53b491b
+  [ok]  tools/list       10 tools advertised
+  [ok]  tools/call       auth_status returned ok=True, connected=True
+  [ok]  error handling   bad input -> NOT_FOUND, not a protocol error
+PASS - this is a working remote MCP endpoint.
+```
+
+### Connecting it on a paid plan
+
+1. **Start the HTTP transport:**
+
+   ```
    .venv\Scripts\python.exe -m mcp_cloudtube --transport http
    ```
 
-   It binds `127.0.0.1:8077` and serves the MCP endpoint at `/mcp`. It binds
-   loopback deliberately: this process holds a live Google OAuth token, and
-   the tunnel should be the only thing that can reach it.
+   It binds `127.0.0.1:8077` and serves MCP at `/mcp`. Loopback is
+   deliberate: this process holds a live Google OAuth token, so the tunnel
+   should be the only way in.
 
-2. **Open a tunnel.** Either works; `cloudflared` needs no account:
+2. **Expose it over HTTPS.** `cloudflared` needs no account:
 
-   ```bash
+   ```
    cloudflared tunnel --url http://127.0.0.1:8077
    ```
 
-   ```bash
-   ngrok http 8077
-   ```
+3. **Add the connector:** ChatGPT → Settings → Connectors → Advanced →
+   Developer mode → *Create*. Paste the tunnel URL **with `/mcp` appended**,
+   and choose no authentication — the server authenticates to *Google*, not to
+   the client.
 
-   Both print an HTTPS URL. Your connector URL is that address with `/mcp`
-   on the end, for example
-   `https://some-name.trycloudflare.com/mcp`.
-
-3. **Add the connector in ChatGPT:** Settings → Connectors → Advanced →
-   Developer mode, then *Create* / *Add custom connector*. Give it a name,
-   paste the `/mcp` URL, and choose "No authentication" — the server
-   authenticates to *Google*, not to the client, and it is only reachable
-   through your tunnel.
-
-4. In a chat, enable the connector for the conversation and try the same
-   prompt as above.
+4. Enable it for a conversation and try the same prompts as Claude.
 
 ### Things that will bite you
 
-- **The tunnel URL changes** every time you restart `cloudflared` on the free
-  tier. Update the connector URL when it does.
-- **Anyone with the tunnel URL can reach your server**, and through it your
-  Drive and YouTube channel. Stop the tunnel when you are not using it. For
-  anything beyond a demo this needs real authentication in front of it; see
-  *Known limitations* in the README.
-- **Leave the server running.** Closing the terminal kills it and the
-  connector stops responding.
+- **The tunnel URL changes** on every restart of free `cloudflared`. Update
+  the connector when it does.
+- **Anyone with that URL can reach your server**, and through it your Drive
+  and YouTube channel. Stop the tunnel when you are not using it. For anything
+  beyond a demo this needs real authentication in front of it — see *Known
+  limitations* in the README.
+- **The server must stay running.** Closing the terminal kills it.
 
 ---
 
-## Verifying either client end to end
+## A five-minute pass that exercises the real paths
 
-A good five-minute pass that exercises the real paths:
+1. *"What's in my MCP Test folder?"* → first run returns `AUTH_REQUIRED` with
+   a link; approve it in the browser, then ask again.
+2. *"Find my product demo videos."* → `search_files` with `videos_only`.
+3. *"What's in the release notes file?"* → `read_file`.
+4. *"Summarise the product spec PDF."* → PDF text extraction.
+5. *"What's in brand-assets.zip?"* → **error case**: `UNSUPPORTED_MEDIA_TYPE`,
+   handled gracefully — it should describe the file rather than fail.
+6. *"Upload the Q4 product demo as unlisted, titled 'Q4 Demo'."* → a job ID.
+7. *"Did it finish?"* → `get_upload_status`.
 
-1. "What's in my Google Drive?" → `connect_account`, approve, then a listing.
-2. "Find my product demo videos." → `search_files` with `videos_only`.
-3. "What's in the release notes file?" → `read_file`.
-4. "What's in assets.zip?" → `UNSUPPORTED_MEDIA_TYPE`, handled gracefully: it
-   should describe the file instead of failing.
-5. "Upload the Q4 demo as unlisted, titled 'Q4 Demo'." → a job ID.
-6. "Did it finish?" → `get_upload_status`, with the privacy caveat if the
-   project is unaudited.
+Prefer naming a folder over *"what's in my Drive"*, which lists everything you
+own — fine in private, less so on a screen recording.
 
-To demonstrate failure handling without spending quota, set
-`CLOUDTUBE_FAKE_YOUTUBE=true` and restart. Nothing is published, and the
-failure paths can be exercised as many times as you like.
+### Exercising failures without spending quota
+
+A real upload costs 1,600 of the 10,000 daily YouTube quota units — about six
+a day including failures. To demonstrate the failure paths repeatedly, set:
+
+```
+CLOUDTUBE_FAKE_YOUTUBE=true
+```
+
+and restart. Uploads are routed to an in-process fake that reproduces dropped
+connections, 503 storms, expired resume sessions, spent quota, duplicate
+rejection and privacy overrides. Nothing is published.

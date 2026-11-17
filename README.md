@@ -9,8 +9,11 @@ driven entirely from chat, with no second interface.
  to YouTube as unlisted, titled 'Q4 Demo'"
 ```
 
-Works with **Claude Desktop** and **ChatGPT**. Runs locally; nothing is
-deployed.
+Runs locally; nothing is deployed. Verified end to end from **Claude
+Desktop** — Drive browsed and read, a video published to YouTube, all from
+chat. **ChatGPT** is supported over the same server's HTTP transport and
+verified at the protocol level, but could not be demonstrated: custom
+connectors require a paid plan.
 
 ---
 
@@ -260,11 +263,25 @@ reset at midnight US/Pacific.
 "Testing", Google expires refresh tokens after 7 days. Handled as
 `AUTH_EXPIRED` with a re-authorise instruction, not a stack trace.
 
-**ChatGPT needs a tunnel, and the tunnel is unauthenticated.** ChatGPT
-connectors must be an HTTPS URL, so a local server needs `cloudflared` or
-`ngrok` in front. Anyone with that URL can reach the server and, through it,
-the connected Drive and YouTube channel. Fine for a demo on a tunnel you stop
-afterwards; not fine for anything else.
+**ChatGPT could not be demonstrated, only verified.** ChatGPT reaches MCP
+servers through custom connectors, which require Plus, Pro, Business or
+Enterprise. On a free account Developer Mode is unavailable, so no connector
+can be added — the blocker is the account tier, not the server.
+
+What was verified: `scripts/verify_http_endpoint.py` does exactly what a
+connector does — opens a session, completes the `initialize` handshake, lists
+the tools, calls one, and confirms a bad argument returns a structured error
+rather than a transport fault. It uses the standard library only, so a
+reviewer can run it immediately, and
+[docs/CONNECTING_CLIENTS.md](docs/CONNECTING_CLIENTS.md) gives the four steps
+to attach it to a paid account.
+
+**The HTTP transport has no authentication of its own.** It binds `127.0.0.1`
+deliberately, so nothing on the network can reach it, but a tunnel put in
+front of it is open to anyone holding the URL — and through it, the connected
+Drive and YouTube account. Adequate for a demo on a tunnel you stop
+afterwards; not adequate for anything else. This is the limitation I would fix
+first, and it is first on the list below.
 
 **Read limits.** `read_file` returns at most 1 MB and truncates with an
 explicit notice. Scanned PDFs have no text layer and are reported as needing
@@ -282,13 +299,13 @@ starting the upload again. The plumbing is there, the trigger is not.
 
 In the order I would actually do them:
 
-1. **Finish automatic resume.** The resume URI is already persisted and
+1. **Authentication on the HTTP transport.** OAuth client credentials or a
+   bearer token, so the ChatGPT path is not secured only by an obscure URL.
+   The one limitation here I would be uncomfortable shipping.
+2. **Finish automatic resume.** The resume URI is already persisted and
    interrupted jobs are already marked; what is missing is a startup pass that
    picks them up and continues. It is the highest-value loose end, because it
    is the difference between "recoverable in principle" and "recovers".
-2. **Real authentication on the HTTP transport.** OAuth client credentials or
-   a bearer token, so the ChatGPT path is not secured only by an obscure URL.
-   This is the one limitation I would be uncomfortable shipping.
 3. **A second provider, to prove the interface earns its keep.** Dropbox is
    the honest test: path-based rather than ID-based, which is where a storage
    abstraction usually turns out to be Drive-shaped. If `StorageProvider`
