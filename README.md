@@ -161,15 +161,39 @@ environment variable, so nothing secret appears in `ps` output or a crash
 dump. A pre-commit hook rejects credential-shaped filenames and greps staged
 diffs for live token patterns.
 
-**Multi-user: single-user by design.** The server runs locally, as a
-subprocess of one person's AI client. The MCP stdio transport carries no
-authenticated principal, so there is no identity to partition tokens by — per-user
-storage would be ceremony, not security. The token store *is* keyed by account
-anyway, so the assumption lives in one constant (`DEFAULT_ACCOUNT`) rather
-than spread through the codebase. Lifting it would mean: real authentication
-on the HTTP transport, mapping an authenticated caller to an account key, and
-per-account rate limiting. That is a different product, and deploying it would
-mean the server no longer "runs locally" as the brief requires.
+**Multi-user: single-user by design, and it genuinely is.** The server runs
+locally as a subprocess of one person's AI client. The MCP stdio transport
+carries no authenticated principal, so there is no identity to partition
+anything by — per-user storage would be ceremony, not security.
+
+Only one thing anticipates a second user: the token store is keyed by account,
+so the assumption lives in one constant (`DEFAULT_ACCOUNT`) rather than spread
+through the codebase. Nothing populates that key with anything else.
+
+Lifting the assumption is more than threading an identity through. Four things
+would have to change, and two of them are correctness problems rather than
+missing features:
+
+1. **Authentication on the HTTP transport.** Without it there is no caller to
+   attribute anything to. stdio cannot be fixed at all — it has no concept of
+   a principal — so multi-user implies HTTP-only, which implies deployment,
+   which the brief rules out.
+2. **Job ownership.** `upload_jobs` has no account column, and
+   `get_upload_status` with no arguments lists recent uploads. Two users on one
+   server would read each other's upload history, including video titles and
+   source filenames. That is a data leak, not an inconvenience.
+3. **Idempotency scope.** Duplicate suppression keys on
+   `sha256(file_id | title | privacy)` with no account in the hash. Two users
+   uploading the same file with the same title would collide, and the second
+   would silently receive the first user's job instead of publishing.
+4. **Per-user isolation of shared state.** Circuit breakers are process-global
+   by design, so one user's outage would stop everyone else's calls. Quota is
+   shared per Cloud project regardless of any code change — 10,000 units a day
+   total, however many users.
+
+So the honest answer is that this is a single-user tool, and the architecture
+says so in more places than the token store. Making it multi-user is a
+different product with a different deployment story.
 
 ---
 
