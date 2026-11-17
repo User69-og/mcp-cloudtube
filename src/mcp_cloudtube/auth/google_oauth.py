@@ -320,16 +320,17 @@ class GoogleAuthManager:
             port = _free_port(self._settings.oauth_redirect_port)
             redirect_uri = f"http://127.0.0.1:{port}/"
 
+            secrets_path = self._settings.resolve_client_secret()
             try:
                 flow = Flow.from_client_secrets_file(
-                    str(self._settings.client_secret_file),
+                    str(secrets_path),
                     scopes=list(GOOGLE_SCOPES),
                     redirect_uri=redirect_uri,
                 )
             except (ValueError, KeyError, OSError) as exc:
                 raise ToolError(
                     ErrorCode.CONFIG_ERROR,
-                    f"The OAuth client secrets file at {self._settings.client_secret_file} "
+                    f"The OAuth client secrets file at {secrets_path} "
                     f"could not be read as a desktop-client credential: {exc}",
                     remediation=(
                         "Re-download it from Google Cloud Console (APIs & Services -> "

@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "cloudtube",
-  "display_name": "CloudTube — Google Drive + YouTube",
+  "display_name": "CloudTube \u2014 Google Drive + YouTube",
   "version": "0.1.0",
   "description": "Browse and read Google Drive, and publish a stored video to YouTube, entirely from chat.",
   "long_description": "Connects Claude to a Google Drive account and a YouTube channel.\n\nBrowse folders, search by name, type or date, read documents (including Google Docs, Sheets, Slides and PDFs), and upload a video from Drive to YouTube with a title, description, tags and privacy status supplied in conversation.\n\nAuthorisation happens through Google's own consent screen: the extension returns a link, you approve it in a browser, and only a scoped, revocable token is ever stored. Drive access is read-only, so the server cannot modify or delete your files.\n\nUploads run as background jobs whose progress survives a restart, and every failure returns a specific reason with guidance on whether retrying can help.",
@@ -16,13 +16,24 @@
   "documentation": "https://github.com/User69-og/mcp-cloudtube#readme",
   "support": "https://github.com/User69-og/mcp-cloudtube/issues",
   "license": "MIT",
-  "keywords": ["google-drive", "youtube", "storage", "video", "upload"],
+  "keywords": [
+    "google-drive",
+    "youtube",
+    "storage",
+    "video",
+    "upload"
+  ],
   "server": {
     "type": "python",
     "entry_point": "server/mcp_cloudtube/__main__.py",
     "mcp_config": {
       "command": "${user_config.python_path}",
-      "args": ["-m", "mcp_cloudtube", "--transport", "stdio"],
+      "args": [
+        "-m",
+        "mcp_cloudtube",
+        "--transport",
+        "stdio"
+      ],
       "env": {
         "PYTHONPATH": "${__dirname}/server",
         "PYTHONUNBUFFERED": "1",
@@ -32,34 +43,69 @@
   },
   "user_config": {
     "python_path": {
-      "type": "file",
-      "title": "Python interpreter",
-      "description": "A Python 3.11+ interpreter that has this project's dependencies installed. After running the project's setup script, this is .venv/Scripts/python.exe on Windows, or .venv/bin/python on macOS and Linux.",
-      "required": true
+      "type": "string",
+      "title": "Python interpreter (optional)",
+      "description": "Leave as 'python' if the Python on your PATH already has this project's dependencies installed. If you used the project's setup script, point this at its virtual environment instead: <project>/.venv/Scripts/python.exe on Windows, or <project>/.venv/bin/python on macOS and Linux.",
+      "required": false,
+      "default": "python"
     },
     "client_secret_path": {
       "type": "file",
-      "title": "Google OAuth client secrets file",
-      "description": "The client_secret.json downloaded from Google Cloud Console for a Desktop OAuth client. See docs/SETUP_GOOGLE_CLOUD.md in the repository. This file stays on your machine and is never transmitted anywhere except to Google.",
-      "required": true,
+      "title": "Google OAuth client secrets file (optional)",
+      "description": "Leave blank if you saved client_secret.json into the server's state folder (it will tell you the exact path if it cannot find one). Otherwise pick the file you downloaded from Google Cloud Console for a Desktop OAuth client. You need your own: this extension ships no credentials, because a Google Cloud project's quota and test-user list are per-account. See docs/SETUP_GOOGLE_CLOUD.md. The file stays on your machine and is sent nowhere except Google.",
+      "required": false,
       "sensitive": true
     }
   },
   "tools": [
-    { "name": "connect_account", "description": "Start connecting a Google account; returns a consent link" },
-    { "name": "auth_status", "description": "Report which account is connected and whether its credentials work" },
-    { "name": "disconnect_account", "description": "Revoke access and delete stored credentials" },
-    { "name": "list_files", "description": "List the contents of one Drive folder" },
-    { "name": "search_files", "description": "Find files by name, content, type or date" },
-    { "name": "get_file_metadata", "description": "Full details about one file, including video duration" },
-    { "name": "read_file", "description": "Readable text from documents, Google files and PDFs" },
-    { "name": "upload_video_to_youtube", "description": "Publish a stored video to YouTube" },
-    { "name": "get_upload_status", "description": "Progress or outcome of an upload" },
-    { "name": "cancel_upload", "description": "Stop an upload in progress" }
+    {
+      "name": "connect_account",
+      "description": "Start connecting a Google account; returns a consent link"
+    },
+    {
+      "name": "auth_status",
+      "description": "Report which account is connected and whether its credentials work"
+    },
+    {
+      "name": "disconnect_account",
+      "description": "Revoke access and delete stored credentials"
+    },
+    {
+      "name": "list_files",
+      "description": "List the contents of one Drive folder"
+    },
+    {
+      "name": "search_files",
+      "description": "Find files by name, content, type or date"
+    },
+    {
+      "name": "get_file_metadata",
+      "description": "Full details about one file, including video duration"
+    },
+    {
+      "name": "read_file",
+      "description": "Readable text from documents, Google files and PDFs"
+    },
+    {
+      "name": "upload_video_to_youtube",
+      "description": "Publish a stored video to YouTube"
+    },
+    {
+      "name": "get_upload_status",
+      "description": "Progress or outcome of an upload"
+    },
+    {
+      "name": "cancel_upload",
+      "description": "Stop an upload in progress"
+    }
   ],
   "compatibility": {
     "claude_desktop": ">=0.10.0",
-    "platforms": ["win32", "darwin", "linux"],
+    "platforms": [
+      "win32",
+      "darwin",
+      "linux"
+    ],
     "runtimes": {
       "python": ">=3.11"
     }

@@ -126,7 +126,10 @@ def _run_check(settings: object) -> int:
             print("               -> start the server, then run connect_account from chat")
 
     print(f"state dir      {settings.state_dir}")
-    print(f"client secret  {settings.client_secret_file}")
+    try:
+        print(f"client secret  {settings.resolve_client_secret()}")
+    except ToolError:
+        print("client secret  NOT FOUND")
     print(f"upload mode    {'FAKE' if settings.fake_youtube else 'live YouTube'}")
 
     return 1 if problems else 0

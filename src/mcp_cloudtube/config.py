@@ -155,6 +155,56 @@ class Settings(BaseSettings):
         return self
 
     # --- Derived paths ------------------------------------------------------
+    def candidate_client_secret_paths(self) -> list[Path]:
+        """Where to look for the OAuth client file, in order of preference.
+
+        The configured path wins. The fallbacks exist so that the Claude
+        Desktop extension can ask for nothing at all when the file is in a
+        conventional place: an extension launches with an unpredictable
+        working directory, so a relative default is no use to it, but the
+        state directory is somewhere both the server and the user can name.
+        """
+        seen: list[Path] = []
+        configured = self.client_secret_file
+        # An unset extension field arrives as an empty string, and Path("") is
+        # the current directory -- which exists, and would pass a naive check.
+        if str(configured) in ("", "."):
+            configured = None  # type: ignore[assignment]
+
+        for candidate in (
+            configured,
+            self.state_dir / "client_secret.json",
+            Path.cwd() / ".secrets" / "client_secret.json",
+            Path.home() / ".cloudtube-mcp" / "client_secret.json",
+        ):
+            if candidate is None:
+                continue
+            resolved = candidate.expanduser()
+            if resolved not in seen:
+                seen.append(resolved)
+        return seen
+
+    def resolve_client_secret(self) -> Path:
+        """First existing candidate, or an error naming every place tried."""
+        candidates = self.candidate_client_secret_paths()
+        for candidate in candidates:
+            if candidate.is_file() and candidate.stat().st_size > 0:
+                return candidate
+
+        listed = "\n".join(f"  - {c}" for c in candidates)
+        raise ToolError(
+            ErrorCode.CONFIG_ERROR,
+            "No Google OAuth client secrets file was found.",
+            remediation=(
+                "Download it from Google Cloud Console (APIs & Services -> Clients -> your "
+                "Desktop client -> Download JSON) and save it to any of these paths:\n"
+                f"{listed}\n"
+                "Or set CLOUDTUBE_CLIENT_SECRET_FILE to wherever you put it. Full "
+                "walkthrough: docs/SETUP_GOOGLE_CLOUD.md"
+            ),
+            details={"searched": [str(c) for c in candidates]},
+        )
+
     @property
     def token_file(self) -> Path:
         return self.state_dir / "google_token.json"
@@ -195,35 +245,11 @@ class Settings(BaseSettings):
                 state_dir=str(self.state_dir),
             ) from exc
 
-        # These two carry an explicit operator-facing remediation rather than
-        # the taxonomy's default. A CONFIG_ERROR is the one class of failure
-        # whose audience is the person setting the server up, not the model --
-        # and "report this to the user verbatim" is useless advice at a
-        # terminal.
-        if not self.client_secret_file.exists():
-            raise ToolError(
-                ErrorCode.CONFIG_ERROR,
-                "OAuth client secrets file not found at "
-                f"{self.client_secret_file.resolve()}.",
-                remediation=(
-                    "In Google Cloud Console, go to APIs & Services -> Clients, open your "
-                    "Desktop client and choose Download JSON. Save it to "
-                    f"{self.client_secret_file}, or point CLOUDTUBE_CLIENT_SECRET_FILE at "
-                    "wherever you put it. Full walkthrough: docs/SETUP_GOOGLE_CLOUD.md"
-                ),
-                details={"expected_path": str(self.client_secret_file.resolve())},
-            )
-
-        if self.client_secret_file.stat().st_size == 0:
-            raise ToolError(
-                ErrorCode.CONFIG_ERROR,
-                f"The OAuth client secrets file at {self.client_secret_file.resolve()} "
-                "is empty.",
-                remediation=(
-                    "The download produced a zero-byte file. Re-download it from Google "
-                    "Cloud Console (APIs & Services -> Clients -> Download JSON)."
-                ),
-            )
+        # Resolution, not a single fixed path: see resolve_client_secret.
+        # CONFIG_ERROR is the one failure class whose audience is the person
+        # setting the server up rather than the model, so its remediation is
+        # written for a terminal, not a chat.
+        self.resolve_client_secret()
 
 
 _settings: Settings | None = None

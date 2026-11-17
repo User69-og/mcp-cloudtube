@@ -132,6 +132,22 @@ categorically different from every other failure. Limits are documented in the
 tool description and validated (or clamped) in code, so every tool answers in
 one shape.
 
+**You bring your own Google Cloud project, and that is not "deployment".**
+Running this needs a Google Cloud project with the two APIs enabled and an
+OAuth client downloaded. That is not a gap in "runs locally, no deployment
+needed" — it is what *"the user connects their own storage account and YouTube
+channel"* requires. Nothing of this project is hosted anywhere: the process
+runs on your machine, binds loopback only, and writes tokens into your own
+user profile. Provisioning your access to your own data is not deploying
+software.
+
+The alternative — shipping a shared OAuth client — is worse and partly
+prohibited. It would mean committing a credential (an explicit rule breach),
+sharing one 10,000-unit daily quota across everyone who runs it (about six
+uploads a day, total), and adding every user to the Testing-mode test-user
+list by hand. `docs/SETUP_GOOGLE_CLOUD.md` makes the one-time setup about
+forty minutes, and `--check` verifies it.
+
 **`drive.readonly`, not `drive`.** The server never writes to Drive, so it
 should not be able to. A bug here cannot delete anyone's documents.
 
@@ -284,6 +300,24 @@ Deliberately *not* on this list: more providers, a web UI, or multi-user. The
 first is breadth over depth, and the other two contradict the brief.
 
 ---
+
+## Installing as a Claude Desktop extension
+
+`dist/cloudtube-0.1.0.mcpb` is a double-click install — no hand-editing JSON
+in an application support directory, which is the step that actually goes
+wrong. It asks for two things, both optional:
+
+| Field | Leave blank if… |
+|---|---|
+| Python interpreter | the `python` on your PATH has this project's dependencies |
+| OAuth client secrets | you saved `client_secret.json` into the server's state folder |
+
+If it cannot find a credentials file it names every path it looked in, so the
+fix is never a guess.
+
+Rebuild it with `make extension`. The bundle carries 83 KB of this project's
+own source and vendors nothing: a full dependency tree would be 196 MB of
+platform-specific compiled binaries, useless to anyone on a different OS.
 
 ## Development
 
