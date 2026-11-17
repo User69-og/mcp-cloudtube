@@ -5,11 +5,12 @@
 ```mermaid
 flowchart TB
     subgraph clients["AI clients"]
-        claude["Claude Desktop<br/><i>launches the server as a subprocess</i>"]
-        chatgpt["ChatGPT<br/><i>connects to an HTTPS URL</i>"]
+        claude["Claude Desktop<br/><i>.mcpb extension</i><br/><i>launches a subprocess</i>"]
+        code["Claude Code<br/><i>mcpServers config</i><br/><i>launches a subprocess</i>"]
+        chatgpt["ChatGPT<br/><i>custom connector, HTTPS</i><br/><i>needs a paid plan</i>"]
     end
 
-    tunnel["Tunnel<br/>(cloudflared / ngrok)<br/><i>only needed for ChatGPT</i>"]
+    tunnel["Tunnel<br/>(cloudflared / ngrok)<br/><i>only for ChatGPT</i><br/><i>unauthenticated</i>"]
 
     subgraph server["mcp-cloudtube  ·  runs locally on the user's machine"]
         direction TB
@@ -42,6 +43,7 @@ flowchart TB
     browser["User's browser<br/><i>consent screen</i>"]
 
     claude -->|"JSON-RPC over stdin/stdout"| transport
+    code -->|"JSON-RPC over stdin/stdout"| transport
     chatgpt -->|HTTPS| tunnel -->|"127.0.0.1:8077/mcp"| transport
 
     transport --> tools
