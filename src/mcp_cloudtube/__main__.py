@@ -14,9 +14,18 @@ import asyncio
 import json
 import sys
 
-from .config import get_settings
-from .errors import ToolError
-from .logging_setup import configure_logging, get_logger
+# This must run before the imports below. Those imports are exactly what fails
+# when the interpreter lacks the project's dependencies -- the most likely
+# setup mistake, since the Claude Desktop extension defaults to whatever
+# `python` is on PATH. Checking first turns a bare ImportError, which the app
+# can only report as "couldn't start", into instructions.
+from ._preflight import check_dependencies
+
+check_dependencies()
+
+from .config import get_settings  # noqa: E402
+from .errors import ToolError  # noqa: E402
+from .logging_setup import configure_logging, get_logger  # noqa: E402
 
 logger = get_logger(__name__)
 
