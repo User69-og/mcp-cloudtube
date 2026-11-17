@@ -10,20 +10,27 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 
+# Every entry here is imported directly by src/. Nothing in this list does
+# the assignment's core work: the Drive and YouTube clients, the resumable
+# upload loop, the retry policy and the circuit breaker are all written in
+# this repository. The only API libraries are Google's own official SDKs and
+# Anthropic's official MCP SDK.
+#
+# Deliberately absent: a retry library (resilience.py implements the policy,
+# because it needs to distinguish a rate limit from a spent quota, which a
+# generic retry helper cannot), and any third-party Drive or YouTube wrapper.
+# uvicorn and starlette are not listed because they arrive with mcp and are
+# never imported here.
 dependencies = [
-    "mcp>=1.2.0",
-    "google-api-python-client>=2.150.0",
-    "google-auth>=2.35.0",
-    "google-auth-oauthlib>=1.2.1",
-    "httpx>=0.27.0",
-    "pydantic>=2.9.0",
-    "pydantic-settings>=2.6.0",
-    "structlog>=24.4.0",
-    "tenacity>=9.0.0",
-    "anyio>=4.6.0",
-    "pypdf>=5.1.0",
-    "uvicorn>=0.32.0",
-    "starlette>=0.41.0",
+    "mcp>=1.2.0",                      # official MCP SDK (protocol only)
+    "google-api-python-client>=2.150.0",  # official Google API client
+    "google-auth>=2.35.0",             # official Google auth
+    "google-auth-oauthlib>=1.2.1",     # official Google OAuth helper
+    "pydantic>=2.9.0",                 # tool argument + domain models
+    "pydantic-settings>=2.6.0",        # configuration
+    "structlog>=24.4.0",               # structured logging
+    "anyio>=4.6.0",                    # thread offload, deadlines
+    "pypdf>=5.1.0",                    # PDF text extraction
 ]
 
 [project.optional-dependencies]
@@ -33,7 +40,6 @@ dev = [
     "pytest-cov>=6.0.0",
     "ruff>=0.7.0",
     "mypy>=1.13.0",
-    "freezegun>=1.5.0",
 ]
 
 [project.scripts]
