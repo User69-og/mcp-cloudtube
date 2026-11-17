@@ -7,10 +7,10 @@ flowchart TB
     subgraph clients["AI clients"]
         claude["Claude Desktop<br/><i>.mcpb extension</i><br/><i>launches a subprocess</i>"]
         code["Claude Code<br/><i>mcpServers config</i><br/><i>launches a subprocess</i>"]
-        chatgpt["ChatGPT<br/><i>custom connector, HTTPS</i><br/><i>needs a paid plan</i>"]
+        chatgpt["ChatGPT<br/><i>custom MCP server plugin</i><br/><i>via Secure MCP Tunnel</i>"]
     end
 
-    tunnel["Tunnel<br/>(cloudflared / ngrok)<br/><i>only for ChatGPT</i><br/><i>unauthenticated</i>"]
+    tunnel["OpenAI Secure MCP Tunnel<br/><i>tunnel-client runs locally</i><br/><i>outbound only; no public URL</i>"]
 
     subgraph server["mcp-cloudtube  ·  runs locally on the user's machine"]
         direction TB
@@ -44,7 +44,7 @@ flowchart TB
 
     claude -->|"JSON-RPC over stdin/stdout"| transport
     code -->|"JSON-RPC over stdin/stdout"| transport
-    chatgpt -->|HTTPS| tunnel -->|"127.0.0.1:8077/mcp"| transport
+    chatgpt -.->|"relayed by OpenAI"| tunnel -->|"127.0.0.1:8077/mcp"| transport
 
     transport --> tools
     tools --> core
@@ -137,6 +137,11 @@ Why a loopback redirect rather than a hosted callback: it is what Google's
 "Desktop app" client type is designed for, the whole exchange stays on the
 user's machine, and no part of this project ever needs a public URL or a
 client secret deployed anywhere.
+
+The same reasoning drives the ChatGPT path. Its model runs on OpenAI's
+servers, so `localhost` is unreachable from there — but rather than publish the
+server behind a public tunnel, `tunnel-client` runs locally and dials *out*,
+so the server stays bound to `127.0.0.1` and no inbound port is ever opened.
 
 ## Layering rule
 

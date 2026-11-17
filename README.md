@@ -9,11 +9,10 @@ driven entirely from chat, with no second interface.
  to YouTube as unlisted, titled 'Q4 Demo'"
 ```
 
-Runs locally; nothing is deployed. Verified end to end from **Claude
-Desktop** — Drive browsed and read, a video published to YouTube, all from
-chat. **ChatGPT** is supported over the same server's HTTP transport and
-verified at the protocol level, but could not be demonstrated: custom
-connectors require a paid plan.
+Runs locally; nothing is deployed. Verified end to end from **both clients**:
+Claude Desktop over stdio via an installed extension, and ChatGPT over
+streamable HTTP via OpenAI's Secure MCP Tunnel. Drive browsed and read, a
+video published to YouTube, all from chat.
 
 ---
 
@@ -287,25 +286,27 @@ reset at midnight US/Pacific.
 "Testing", Google expires refresh tokens after 7 days. Handled as
 `AUTH_EXPIRED` with a re-authorise instruction, not a stack trace.
 
-**ChatGPT could not be demonstrated, only verified.** ChatGPT reaches MCP
-servers through custom connectors, which require Plus, Pro, Business or
-Enterprise. On a free account Developer Mode is unavailable, so no connector
-can be added — the blocker is the account tier, not the server.
+**ChatGPT needs a relay, because its model runs on OpenAI's servers.** A
+`localhost` URL cannot work from there. Rather than expose the server with a
+public tunnel, it uses OpenAI's **Secure MCP Tunnel**: a `tunnel-client`
+process runs on the same machine, opens an *outbound* connection to
+`api.openai.com`, and relays MCP calls back to `127.0.0.1:8077`. No inbound
+port, no public hostname, and the tunnel is bound to one ChatGPT workspace.
 
-What was verified: `scripts/verify_http_endpoint.py` does exactly what a
-connector does — opens a session, completes the `initialize` handshake, lists
-the tools, calls one, and confirms a bad argument returns a structured error
-rather than a transport fault. It uses the standard library only, so a
-reviewer can run it immediately, and
-[docs/CONNECTING_CLIENTS.md](docs/CONNECTING_CLIENTS.md) gives the four steps
-to attach it to a paid account.
+The practical cost is that `tunnel-client` must be running for the ChatGPT
+connector to work, where the Claude extension needs nothing beyond the client
+itself. Setup is documented in
+[docs/CONNECTING_CLIENTS.md](docs/CONNECTING_CLIENTS.md), and
+`scripts/verify_http_endpoint.py` confirms the endpoint independently of any
+client.
 
-**The HTTP transport has no authentication of its own.** It binds `127.0.0.1`
-deliberately, so nothing on the network can reach it, but a tunnel put in
-front of it is open to anyone holding the URL — and through it, the connected
-Drive and YouTube account. Adequate for a demo on a tunnel you stop
-afterwards; not adequate for anything else. This is the limitation I would fix
-first, and it is first on the list below.
+**The HTTP transport has no authentication of its own.** It binds
+`127.0.0.1`, so nothing on the network can reach it directly, and OpenAI's
+tunnel is bound to one workspace rather than being a public URL. But the
+server itself authenticates no one: any client that reaches it acts as the
+connected Google account. That is coherent for a single-user tool running on
+one person's machine, and it is exactly why a *public* tunnel in front of it
+would be a bad idea. Adding real authentication is first on the list below.
 
 **Read limits.** `read_file` returns at most 1 MB and truncates with an
 explicit notice. Scanned PDFs have no text layer and are reported as needing

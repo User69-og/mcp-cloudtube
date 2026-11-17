@@ -6,8 +6,8 @@ The server is the same for both clients. Only the transport differs.
 |---|---|---|---|
 | How it connects | installed extension | `claude_desktop_config.json` | custom connector (HTTPS URL) |
 | Transport | stdio | stdio | streamable HTTP |
-| Listening socket | **none** | **none** | `127.0.0.1:8077`, behind a tunnel |
-| Status | **working, verified** | **working, verified** | **verified at the protocol level**; see below |
+| Listening socket | **none** | **none** | `127.0.0.1:8077`, behind OpenAI's relay |
+| Status | **working, verified** | **working, verified** | **working, verified** |
 
 ---
 
@@ -85,10 +85,10 @@ the obvious path has no `mcpServers` key.
 {
   "mcpServers": {
     "cloudtube": {
-      "command": "E:\Internship Project\.venv\Scripts\python.exe",
+      "command": "E:\\Internship Project\\.venv\\Scripts\\python.exe",
       "args": ["-m", "mcp_cloudtube", "--transport", "stdio"],
       "env": {
-        "CLOUDTUBE_CLIENT_SECRET_FILE": "E:\Internship Project\.secrets\client_secret.json"
+        "CLOUDTUBE_CLIENT_SECRET_FILE": "E:\\Internship Project\\.secrets\\client_secret.json"
       }
     }
   }
@@ -103,71 +103,80 @@ afterwards — a background process keeps the old server list alive.
 
 ## ChatGPT
 
-**The server supports this and it has been verified. The blocker is the
-account tier, not the code.**
+ChatGPT's model runs on OpenAI's servers, so a `localhost` URL cannot reach
+your machine. The obvious fix — a public tunnel such as `cloudflared` — would
+put a server holding live Google credentials on the open internet, protected
+only by an unguessable hostname.
 
-ChatGPT reaches MCP servers through custom connectors, which require **Plus,
-Pro, Business or Enterprise**. On a free account, Developer Mode is not
-available and no connector can be added — so the path cannot be
-*demonstrated* on a free plan, however correct the server is.
+OpenAI's **Secure MCP Tunnel** avoids that. A `tunnel-client` process runs on
+your machine, opens an *outbound* connection to `api.openai.com:443`, and
+relays MCP calls to your local server. There is no inbound port, no public
+hostname, and the tunnel is bound to one ChatGPT workspace.
 
-What *can* be shown is that the endpoint is a working remote MCP server:
+### Setup
+
+**1. Create a tunnel** at
+[platform.openai.com/settings/organization/tunnels](https://platform.openai.com/settings/organization/tunnels).
+Give it a name and select your ChatGPT workspace. Note the `tunnel_…` ID.
+
+**2. Create a runtime API key** under *API keys*. Use **Restricted**
+permissions with **Tunnels: Read + Use** and nothing else — the client needs
+no other access, and a key scoped this narrowly cannot spend money or read
+data if it leaks. Set an expiry.
+
+**3. Download `tunnel-client`** from the Tunnels page, or from
+[github.com/openai/tunnel-client/releases](https://github.com/openai/tunnel-client/releases/latest).
+Verify it against the published `SHA256SUMS.txt` before running it.
+
+**4. Start the MCP server over HTTP:**
 
 ```
-python -m mcp_cloudtube --transport http        # in one terminal
-python scripts/verify_http_endpoint.py          # in another
+.venv\Scripts\python.exe -m mcp_cloudtube --transport http
 ```
 
-That script uses the standard library only and does exactly what a connector
-does: opens a session, completes the `initialize` handshake, lists the tools,
-calls one, and checks that a bad argument comes back as a structured error
-rather than a transport fault. Sample output:
+**5. Point the client at it.** The API key goes in the environment, never into
+a config file:
 
 ```
-  [ok]  initialize       cloudtube v0.1.0
-  [ok]  session id       99e297d50e874121b1ceeb3ce53b491b
-  [ok]  tools/list       10 tools advertised
-  [ok]  tools/call       auth_status returned ok=True, connected=True
-  [ok]  error handling   bad input -> NOT_FOUND, not a protocol error
-PASS - this is a working remote MCP endpoint.
+$env:CONTROL_PLANE_API_KEY = "sk-..."
+
+tunnel-client init --profile cloudtube --tunnel-id tunnel_xxx --mcp-server-url http://127.0.0.1:8077/mcp
+tunnel-client doctor --profile cloudtube --explain
+tunnel-client run --profile cloudtube
 ```
 
-### Connecting it on a paid plan
+`doctor` should print `RESULT ok`. `run` should log `mcp session initialized`
+with `server_name: cloudtube`, confirming the relay reached your server. A
+local admin UI is served at `http://127.0.0.1:8080/ui`.
 
-1. **Start the HTTP transport:**
+**6. Add the connector:** ChatGPT → **Plugins** → **Add** → **Add custom MCP
+server**. Under *Connection* choose the **Tunnel** tab and select your tunnel.
+Authentication: **No authentication**. Accept the risk notice, then **Create as
+a plugin** and install it.
 
-   ```
-   .venv\Scripts\python.exe -m mcp_cloudtube --transport http
-   ```
+### Things worth knowing
 
-   It binds `127.0.0.1:8077` and serves MCP at `/mcp`. Loopback is
-   deliberate: this process holds a live Google OAuth token, so the tunnel
-   should be the only way in.
+- **`tunnel-client` must stay running.** Stop it and the connector goes dead.
+  This is the one place ChatGPT is more work than Claude, whose extension
+  needs nothing beyond the client itself.
+- **The server authenticates no one.** Any client that reaches it acts as the
+  connected Google account. That is coherent for a single-user tool on one
+  machine — and it is precisely why a public tunnel would be the wrong choice.
+- **Credentials are shared between clients.** Authorise once in Claude and
+  ChatGPT is already connected, because both talk to the same server and the
+  same token store. To demonstrate the first-run flow in ChatGPT, run
+  `disconnect_account` first.
 
-2. **Expose it over HTTPS.** `cloudflared` needs no account:
+### Verifying without a client
 
-   ```
-   cloudflared tunnel --url http://127.0.0.1:8077
-   ```
+`scripts/verify_http_endpoint.py` does what a connector does — opens a
+session, completes the `initialize` handshake, lists the tools, calls one, and
+checks that a bad argument returns a structured error rather than a transport
+fault. Standard library only:
 
-3. **Add the connector:** ChatGPT → Settings → Connectors → Advanced →
-   Developer mode → *Create*. Paste the tunnel URL **with `/mcp` appended**,
-   and choose no authentication — the server authenticates to *Google*, not to
-   the client.
-
-4. Enable it for a conversation and try the same prompts as Claude.
-
-### Things that will bite you
-
-- **The tunnel URL changes** on every restart of free `cloudflared`. Update
-  the connector when it does.
-- **Anyone with that URL can reach your server**, and through it your Drive
-  and YouTube channel. Stop the tunnel when you are not using it. For anything
-  beyond a demo this needs real authentication in front of it — see *Known
-  limitations* in the README.
-- **The server must stay running.** Closing the terminal kills it.
-
----
+```
+python scripts/verify_http_endpoint.py
+```
 
 ## A five-minute pass that exercises the real paths
 
