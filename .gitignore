@@ -35,6 +35,10 @@ __pycache__/
 .eggs/
 build/
 dist/
+# ...but the built Claude Desktop extension is a deliverable: a reviewer
+# should be able to download one file and double-click it.
+!dist/
+!dist/*.mcpb
 .venv/
 venv/
 env/

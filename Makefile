@@ -35,6 +35,9 @@ run: ## Serve over stdio (Claude Desktop)
 run-http: ## Serve over HTTP (ChatGPT)
 	$(PY) -m mcp_cloudtube --transport http
 
+extension: ## Build the Claude Desktop extension (.mcpb)
+	$(PY) scripts/build_extension.py
+
 doctor: ## Report configuration and credential status
 	$(PY) -m mcp_cloudtube --check
 
