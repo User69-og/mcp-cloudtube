@@ -55,9 +55,12 @@ asyncio_default_fixture_loop_scope = "function"
 # basetemp is pinned inside the project so the suite does not depend on the
 # state of the system temp directory, which on a developer machine can carry
 # stale, permission-broken directories from unrelated tools.
-addopts = "-ra --strict-markers --basetemp=.pytest-tmp"
+# Integration tests are excluded by default: they need a connected Google
+# account, which a reviewer may not have set up yet. `pytest -m integration`
+# overrides this, because command-line -m wins over addopts.
+addopts = "-ra --strict-markers --basetemp=.pytest-tmp -m 'not integration'"
 markers = [
-    "integration: hits real Google APIs; requires credentials and burns quota",
+    "integration: talks to the real Google APIs; needs a connected account. Read-only and cheap. Run with: pytest -m integration",
 ]
 
 [tool.ruff]

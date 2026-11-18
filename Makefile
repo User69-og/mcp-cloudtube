@@ -18,6 +18,9 @@ setup: ## Create the venv, install everything, arm the credential hook
 test: ## Run the full suite
 	$(PY) -m pytest -q
 
+test-live: ## Run the tests that talk to the real Google APIs
+	$(PY) -m pytest -m integration -v
+
 test-failures: ## Run only the failure scenarios
 	$(PY) -m pytest tests/failure -v
 

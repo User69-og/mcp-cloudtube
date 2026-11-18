@@ -257,6 +257,25 @@ half-published video reported as success.
 These run against an injectable fake YouTube transport. A real upload costs
 1600 of 10,000 daily quota units — about six per day including failures — so
 testing against production would mean testing error handling roughly never.
+A fake can also produce what nobody can summon on demand: a connection that
+drops at 75%, an expired resume session, a quota that just ran out.
+
+**What a fake cannot prove is that the real API still behaves as assumed.**
+That seam is covered by a separate suite that talks to live Google:
+
+```bash
+make test-live          # or: pytest -m integration
+```
+
+18 read-only tests — browsing, search filters, metadata, text and PDF
+extraction, the binary refusal, and a genuine 404. They are excluded from the
+default run and skip themselves when no account is connected, so `pytest`
+stays fast and offline for anyone who has not done the Google Cloud setup.
+Drive operations cost about one quota unit each; nothing here uploads, and the
+`drive.readonly` scope means nothing could write even if a test asked.
+
+Running both takes coverage of the Google-facing modules from 42% to 67%, and
+the project overall to 75%.
 
 ---
 
