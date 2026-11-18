@@ -238,10 +238,11 @@ bodies sometimes echo request parameters back.
 
 ### Tested, not asserted
 
-212 tests, including 17 failure scenarios:
+**270 tests** — 252 that run offline in about three seconds, and 18 that talk
+to live Google. Among the offline ones are 17 failure scenarios:
 
 ```bash
-.venv\Scripts\python.exe -m pytest tests/failure -v
+make test-failures      # or: pytest tests/failure -v
 ```
 
 Spent quota · dropped connection mid-upload · truncated download · transient
