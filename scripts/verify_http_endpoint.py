@@ -2,22 +2,21 @@
 
 Why this script exists
 ----------------------
-The assignment asks for the server to work from both Claude and ChatGPT.
-ChatGPT reaches MCP servers through custom connectors, which are available
-only on paid plans -- so on a free account the client cannot be pointed at
-this server no matter how correct the server is.
+The HTTP transport is what ChatGPT reaches, through OpenAI's Secure MCP
+Tunnel. This script does what that relay does -- opens a session, completes
+the MCP initialize handshake, lists the tools, calls one, and checks that a
+bad argument comes back as a structured error rather than a transport fault.
 
-That makes the ChatGPT path impossible to *demonstrate* but perfectly
-possible to *verify*. This script does what ChatGPT's connector would do:
-opens a session, completes the MCP initialize handshake, lists the tools,
-and calls one. If it passes, the endpoint is a working remote MCP server and
-the only remaining requirement is a client permitted to connect to it.
+It is useful for two things: confirming the endpoint is healthy before
+wiring up a client, and isolating a problem when a connector misbehaves --
+if this passes, the server is fine and the fault is in the relay or the
+client.
 
 Run against a local server:
     python scripts/verify_http_endpoint.py
 
-Or against a tunnel, which is what a connector would use:
-    python scripts/verify_http_endpoint.py https://example.trycloudflare.com/mcp
+Or against any other MCP endpoint:
+    python scripts/verify_http_endpoint.py https://example.com/mcp
 
 Standard library only, so a reviewer can run it without installing anything.
 """
@@ -46,13 +45,13 @@ class Session:
 
     def _post(self, payload: dict, *, expect_response: bool = True) -> dict | None:
         body = json.dumps(payload).encode("utf-8")
-        request = urllib.request.Request(self.url, data=body, method="POST")  # noqa: S310
+        request = urllib.request.Request(self.url, data=body, method="POST")
         request.add_header("Content-Type", "application/json")
         request.add_header("Accept", "application/json, text/event-stream")
         if self.session_id:
             request.add_header("mcp-session-id", self.session_id)
 
-        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
+        with urllib.request.urlopen(request, timeout=30) as response:
             returned = response.headers.get("mcp-session-id")
             if returned:
                 self.session_id = returned
@@ -121,7 +120,7 @@ def main(argv: list[str]) -> int:
         print("  Start the server first:")
         print("    python -m mcp_cloudtube --transport http")
         return 1
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"{CROSS}initialize       {type(exc).__name__}: {exc}")
         return 1
 
@@ -134,7 +133,7 @@ def main(argv: list[str]) -> int:
         if len(tools) < 6:
             print(f"{CROSS}expected at least the six tools the brief names")
             failures += 1
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"{CROSS}tools/list       {type(exc).__name__}: {exc}")
         return 1
 
@@ -148,7 +147,7 @@ def main(argv: list[str]) -> int:
             connected = result.get("connected")
             print(f"{TICK}tools/call       auth_status returned ok={result['ok']}, "
                   f"connected={connected}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"{CROSS}tools/call       {type(exc).__name__}: {exc}")
         failures += 1
 
@@ -161,7 +160,7 @@ def main(argv: list[str]) -> int:
         else:
             print(f"{CROSS}error handling   expected a structured failure, got: {result}")
             failures += 1
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"{CROSS}error handling   a tool error escaped as {type(exc).__name__}: {exc}")
         failures += 1
 
@@ -172,11 +171,15 @@ def main(argv: list[str]) -> int:
 
     print("PASS - this is a working remote MCP endpoint.")
     print()
-    print("  To connect it to ChatGPT (requires Plus, Pro, Business or Enterprise;")
-    print("  custom connectors are not available on the free tier):")
-    print("    1. expose it over HTTPS, e.g.  cloudflared tunnel --url http://127.0.0.1:8077")
-    print("    2. ChatGPT -> Settings -> Connectors -> Developer mode")
-    print("    3. Add a custom connector pointing at  <https-url>/mcp , no authentication")
+    print("  To connect it to ChatGPT, use OpenAI's Secure MCP Tunnel, which relays")
+    print("  to this server without exposing it publicly:")
+    print("    1. create a tunnel at platform.openai.com/settings/organization/tunnels")
+    print("    2. tunnel-client init --profile cloudtube --tunnel-id tunnel_xxx \\")
+    print("         --mcp-server-url http://127.0.0.1:8077/mcp")
+    print("    3. tunnel-client run --profile cloudtube")
+    print("    4. ChatGPT -> Plugins -> Add -> Add custom MCP server -> Connection: Tunnel")
+    print()
+    print("  Full steps: docs/CONNECTING_CLIENTS.md")
     return 0
 
 

@@ -75,7 +75,7 @@ def main() -> int:
     print(f"staged  {files} files, {staged_bytes / 1024:.0f} KB")
 
     # --- validate ---------------------------------------------------------
-    validate = subprocess.run(  # noqa: S603
+    validate = subprocess.run(
         ["npx", "--yes", "@anthropic-ai/mcpb", "validate", str(STAGING / "manifest.json")],
         capture_output=True, text=True, shell=(sys.platform == "win32"),
     )
@@ -86,7 +86,7 @@ def main() -> int:
     # --- pack -------------------------------------------------------------
     output = DIST / f"{name}-{version}.mcpb"
     output.unlink(missing_ok=True)
-    pack = subprocess.run(  # noqa: S603
+    pack = subprocess.run(
         ["npx", "--yes", "@anthropic-ai/mcpb", "pack", str(STAGING), str(output)],
         capture_output=True, text=True, shell=(sys.platform == "win32"),
     )
